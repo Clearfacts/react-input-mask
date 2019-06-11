@@ -1,6 +1,21 @@
+# ClearFacts react-input-mask
+
+An unwanted interaction occurs between the currently used react-datepicker@2.1.0 and react-input-mask@2.0.5.
+When selecting text inside a datepicker using a masked input, after letting go of the mouse, the selection would be undone.
+
+This is caused by the datepicker [re-rendering (cloning) the custom input on mouseUp (basically any event)](https://github.com/Hacker0x01/react-datepicker/blob/v2.1.0/src/index.jsx#L692), 
+the cloned element not having a previous state, and therefore resetting the selection to the cursor position.
+
+The resetting of the selection is simply commented out [in this commit](https://github.com/Clearfacts/react-input-mask/commit/93d3987aea8828526fd31ac763552ddc81225e43), 
+therefore fixing the issue in our specific case.
+
+Latest tested versions:
+* react-datepicker: 2.7.0
+* react-input-mask: 2.0.5
+
 # react-input-mask
 
-[![Build Status](https://img.shields.io/travis/sanniassin/react-input-mask/master.svg?style=flat)](https://travis-ci.org/sanniassin/react-input-mask) [![npm version](https://img.shields.io/npm/v/react-input-mask.svg?style=flat)](https://www.npmjs.com/package/react-input-mask) [![npm downloads](https://img.shields.io/npm/dm/react-input-mask.svg?style=flat)](https://www.npmjs.com/package/react-input-mask)
+[![Build Status](https://img.shields.io/travis/sanniassin/react-input-mask/master.svg?style=flat)](https://travis-ci.org/sanniassin/react-input-mask) [![npm version](https://img.shields.io/npm/v/react-input-mask.svg?style=flat)](https://www.npmjs.com/package/@clearfacts/react-input-mask) [![npm downloads](https://img.shields.io/npm/dm/react-input-mask.svg?style=flat)](https://www.npmjs.com/package/@clearfacts/react-input-mask)
 
 Input masking component for React. Made with attention to UX. Compatible with IE8+.
 
