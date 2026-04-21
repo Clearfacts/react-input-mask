@@ -187,7 +187,7 @@ Please note that it might lead to worse user experience (should I enter +1 if in
 Thanks to [BrowserStack](https://www.browserstack.com/) for the help with testing on real devices
 
 ## Technical debt links
-
-[Barometer IT](https://wolterskluwer.barometerit.com/b/system/041800002496)
-[SonarQube Project](https://sonarqube.cloud-dev.wolterskluwer.eu/dashboard?id=clearfacts%3Areact-input-mask)
-[Checkmarx Project](https://test4tools.cchaxcess.com/CxWebClient/ProjectStateSummary.aspx?projectid=17864)
+- [Barometer IT](https://wolterskluwer.barometerit.com/b/system/041800002496)
+- [SonarQube Project](https://sonarqube.cloud-dev.wolterskluwer.eu/dashboard?id=clearfacts%3Areact-input-mask)
+- [Black Duck Project](https://wolterskluwer.app.blackduck.com/api/projects?q=name:react-input-mask)
+- [Checkmarx Project](https://test4tools.cchaxcess.com/CxWebClient/Projects.aspx)
