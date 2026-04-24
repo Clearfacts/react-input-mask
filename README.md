@@ -191,3 +191,5 @@ Thanks to [BrowserStack](https://www.browserstack.com/) for the help with testin
 - [SonarQube Project](https://sonarqube.cloud-dev.wolterskluwer.eu/dashboard?id=clearfacts%3Areact-input-mask)
 - [Black Duck Project](https://wolterskluwer.app.blackduck.com/api/projects/e959ceac-5fef-4643-a599-c100ec01b462)
 - [Checkmarx Project](https://test4tools.cchaxcess.com/CxWebClient/ProjectStateSummary.aspx?projectid=18819)
+
+- [x] zero dependencies
