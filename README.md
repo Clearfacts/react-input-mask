@@ -181,7 +181,7 @@ Browser's autofill requires either empty value in input or value which exactly m
 2. Apply mask only if value is not empty. In general, this is the most reliable solution because we can't be sure about formatting in autofilled value.
 3. Use less formatting in the mask.
 
-Please note that it might lead to worse user experience (should I enter +1 if input is empty?). You should choose what's more important to your users — smooth typing experience or autofill. Phone and ZIP code inputs are very likely to be autofilled and it's a good idea to care about it, while security confirmation code in two-factor authorization shouldn't care about autofill at all.
+Please note that it might lead to worse user experience (should I enter +1 if input is empty?). You should choose what's more important to your users â smooth typing experience or autofill. Phone and ZIP code inputs are very likely to be autofilled and it's a good idea to care about it, while security confirmation code in two-factor authorization shouldn't care about autofill at all.
 
 # Thanks
 Thanks to [BrowserStack](https://www.browserstack.com/) for the help with testing on real devices
@@ -190,4 +190,4 @@ Thanks to [BrowserStack](https://www.browserstack.com/) for the help with testin
 - [Barometer IT](https://wolterskluwer.barometerit.com/b/system/041800002496)
 - [SonarQube Project](https://sonarqube.cloud-dev.wolterskluwer.eu/dashboard?id=clearfacts%3Areact-input-mask)
 - [Black Duck Project](https://wolterskluwer.app.blackduck.com/api/projects?q=name:react-input-mask)
-- [Checkmarx Project](https://test4tools.cchaxcess.com/CxWebClient/Projects.aspx)
+- [Checkmarx Project](https://test4tools.cchaxcess.com/CxWebClient/ProjectStateSummary.aspx?projectid=18819)
