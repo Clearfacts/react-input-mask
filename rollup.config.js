@@ -32,11 +32,7 @@ const minifiedPlugins = [
       'babel-plugin-minify-dead-code-elimination'
     ]
   }),
-  uglify({
-    compress: { warnings: false, ie8: true },
-    mangle: { ie8: true },
-    output: { ie8: true }
-  })
+  uglify()
 ];
 
 export default [

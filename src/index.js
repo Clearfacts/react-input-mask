@@ -1,5 +1,4 @@
 import React from 'react';
-import { findDOMNode } from 'react-dom';
 import invariant from 'invariant';
 import warning from 'warning';
 
@@ -24,6 +23,7 @@ class InputElement extends React.Component {
   previousSelection = null
   selectionDeferId = null
   saveSelectionLoopDeferId = null
+  inputNode = null
 
   constructor(props) {
     super(props);
@@ -155,7 +155,11 @@ class InputElement extends React.Component {
     // call forceUpdate to keep it in sync
     if (isValueChanged) {
       this.setInputValue(this.value);
-      this.forceUpdate();
+      // Only force re-render if the DOM node exists; otherwise setInputValue
+      // was a no-op and forceUpdate would cause an infinite loop
+      if (this.getInputDOMNode()) {
+        this.forceUpdate();
+      }
     } else if (isMaskChanged) {
       this.forceUpdate();
     }
@@ -207,14 +211,19 @@ class InputElement extends React.Component {
       return null;
     }
 
-    let input = findDOMNode(this);
+    let input = this.inputNode;
+
+    // workaround for react-test-renderer
+    // https://github.com/sanniassin/react-input-mask/issues/147
+    if (!input) {
+      return null;
+    }
+
     const isDOMNode = typeof window !== 'undefined'
                       &&
                       input instanceof window.Element;
 
-    // workaround for react-test-renderer
-    // https://github.com/sanniassin/react-input-mask/issues/147
-    if (input && !isDOMNode) {
+    if (!isDOMNode) {
       return null;
     }
 
@@ -291,6 +300,10 @@ class InputElement extends React.Component {
 
   getSelection = () => {
     const input = this.getInputDOMNode();
+
+    if (!input) {
+      return { start: 0, end: 0, length: 0 };
+    }
 
     return getInputSelection(input);
   }
@@ -411,6 +424,13 @@ class InputElement extends React.Component {
 
     // if autoFocus is set, onFocus triggers before componentDidMount
     this.mounted = true;
+
+    // In React 19, autoFocus triggers el.focus() during commitMount BEFORE
+    // refs are attached, so this.inputNode may not be set yet. Use
+    // event.target as a fallback to get the DOM input node.
+    if (!this.inputNode && event && event.target) {
+      this.inputNode = event.target;
+    }
 
     if (mask) {
       if (!this.value) {
@@ -542,6 +562,7 @@ class InputElement extends React.Component {
   }
 
   handleRef = (ref) => {
+    this.inputNode = ref;
     if (this.props.children == null && isFunction(this.props.inputRef)) {
       this.props.inputRef(ref);
     }
@@ -565,7 +586,7 @@ class InputElement extends React.Component {
       );
 
       const controlledProps = ['onChange', 'onPaste', 'onMouseDown', 'onFocus', 'onBlur', 'value', 'disabled', 'readOnly'];
-      const childrenProps = { ...restProps };
+      const childrenProps = { ...restProps, ref: this.handleRef };
       controlledProps.forEach((propId) => delete childrenProps[propId]);
 
       inputElement = children(childrenProps);

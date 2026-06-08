@@ -25,11 +25,6 @@ module.exports = {
           loader: 'babel-loader'
         },
         exclude: /node_modules/
-      },
-      {
-        test: /\.js$/,
-        enforce: 'post',
-        loader: 'es3ify-loader'
       }
     ]
   },
