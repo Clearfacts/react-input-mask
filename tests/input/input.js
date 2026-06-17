@@ -1,57 +1,79 @@
 /* global describe, it */
 
-import React from 'react';
-import ReactDOM from 'react-dom';
-import TestUtils from 'react-dom/test-utils';
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { expect } from 'chai'; // eslint-disable-line import/no-extraneous-dependencies
 import { defer } from '../../src/utils/defer';
 import Input from '../../src';
-import { isDOMElement } from '../../src/utils/helpers';
 
 document.body.innerHTML = '<div id="container"></div>';
 const container = document.getElementById('container');
 
+let currentRoot = null;
+let currentRefCallback = null;
+
+// Use the native value setter to bypass React's input value tracker.
+// React installs a custom value property on input elements to detect changes.
+// When setting value programmatically in tests, we need to bypass the tracker
+// so that dispatching native events correctly triggers React's onChange handler.
+const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+  HTMLInputElement.prototype, 'value'
+).set;
+
+const setNativeInputValue = (node, value) => {
+  nativeInputValueSetter.call(node, value);
+};
+
+const fireInputEvent = (node) => {
+  node.dispatchEvent(new Event('input', { bubbles: true }));
+};
+
+const firePasteEvent = (node) => {
+  node.dispatchEvent(new Event('paste', { bubbles: true, cancelable: true }));
+};
+
 const getInputDOMNode = (input) => {
-  if (!isDOMElement(input)) {
-    input = ReactDOM.findDOMNode(input);
-  }
-
-  if (input.nodeName !== 'INPUT') {
-    input = input.querySelector('input');
-  }
-
-  if (!input) {
-    throw new Error('inputComponent doesn\'t contain input node');
-  }
-
-  return input;
+  return input.getInputDOMNode();
 };
 
 const createInput = (component, cb) => {
   return () => {
     let input;
 
-    ReactDOM.unmountComponentAtNode(container);
+    if (currentRoot) {
+      currentRoot.unmount();
+    }
+    currentRoot = createRoot(container);
+
+    currentRefCallback = (ref) => {
+      if (ref) input = ref;
+    };
 
     component = React.cloneElement(component, {
-      ref: (ref) => input = ref
+      ref: currentRefCallback
     });
 
     return new Promise((resolve, reject) => {
-      ReactDOM.render(component, container, () => {
-        // IE can fail if executed synchronously
-        setImmediate(() => {
-          const inputNode = getInputDOMNode(input);
-          Promise.resolve(cb(input, inputNode))
-            .then(() => {
-              ReactDOM.unmountComponentAtNode(container);
-              resolve();
-            })
-            .catch((err) => {
-              ReactDOM.unmountComponentAtNode(container);
-              reject(err);
-            });
-        });
+      act(() => {
+        currentRoot.render(component);
+      });
+
+      // IE can fail if executed synchronously
+      setImmediate(() => {
+        const inputNode = getInputDOMNode(input);
+        Promise.resolve(cb(input, inputNode))
+          .then(() => {
+            currentRoot.unmount();
+            currentRoot = null;
+            resolve();
+          })
+          .catch((err) => {
+            currentRoot.unmount();
+            currentRoot = null;
+            reject(err);
+          });
       });
     });
   };
@@ -72,7 +94,9 @@ const setInputSelection = (input, start, length) => {
 };
 
 const setInputProps = (input, props) => {
-  ReactDOM.render(React.createElement(Input, { ...input.props, ...props }), container);
+  act(() => {
+    currentRoot.render(React.createElement(Input, { ...input.props, ...props, ref: currentRefCallback }));
+  });
 };
 
 const insertStringIntoInput = (input, str) => {
@@ -80,11 +104,11 @@ const insertStringIntoInput = (input, str) => {
   const selection = input.getSelection();
   const { value } = inputNode;
 
-  inputNode.value = value.slice(0, selection.start) + str + value.slice(selection.end);
+  setNativeInputValue(inputNode, value.slice(0, selection.start) + str + value.slice(selection.end));
 
   setInputSelection(inputNode, selection.start + str.length, 0);
 
-  TestUtils.Simulate.change(inputNode);
+  fireInputEvent(inputNode);
 };
 
 const simulateInputKeyPress = insertStringIntoInput;
@@ -92,7 +116,7 @@ const simulateInputKeyPress = insertStringIntoInput;
 const simulateInputPaste = (input, str) => {
   const inputNode = getInputDOMNode(input);
 
-  TestUtils.Simulate.paste(inputNode);
+  firePasteEvent(inputNode);
 
   insertStringIntoInput(input, str);
 };
@@ -103,14 +127,14 @@ const simulateInputBackspacePress = (input) => {
   const { value } = inputNode;
 
   if (selection.length) {
-    inputNode.value = value.slice(0, selection.start) + value.slice(selection.end);
+    setNativeInputValue(inputNode, value.slice(0, selection.start) + value.slice(selection.end));
     setInputSelection(inputNode, selection.start, 0);
   } else if (selection.start) {
-    inputNode.value = value.slice(0, selection.start - 1) + value.slice(selection.end);
+    setNativeInputValue(inputNode, value.slice(0, selection.start - 1) + value.slice(selection.end));
     setInputSelection(inputNode, selection.start - 1, 0);
   }
 
-  TestUtils.Simulate.change(inputNode);
+  fireInputEvent(inputNode);
 };
 
 const simulateInputDeletePress = (input) => {
@@ -123,18 +147,16 @@ const simulateInputDeletePress = (input) => {
   } else if (selection.start < value.length) {
     value = value.slice(0, selection.start) + value.slice(selection.end + 1);
   }
-  inputNode.value = value;
+  setNativeInputValue(inputNode, value);
 
   setInputSelection(inputNode, selection.start, 0);
 
-  TestUtils.Simulate.change(inputNode);
+  fireInputEvent(inputNode);
 };
 
-class TestInputComponent extends React.Component {
-  render() {
-    return <div><input {...this.props} /></div>;
-  }
-}
+const TestInputComponent = (props) => {
+  return <div><input {...props} /></div>;
+};
 
 const TestFunctionalInputComponent = (props) => {
   return <div><div><input {...props} /></div></div>;
@@ -156,38 +178,32 @@ describe('react-input-mask', () => {
       expect(inputNode.value).to.equal('');
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
       expect(inputNode.value).to.equal('+7 (___) ___ __ __');
     }));
 
   it('should clear input on blur', createInput(
     <Input mask="+7 (*a9) 999 99 99" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
       expect(inputNode.value).to.equal('+7 (___) ___ __ __');
 
       inputNode.blur();
-      TestUtils.Simulate.blur(inputNode);
       expect(inputNode.value).to.equal('');
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
       simulateInputKeyPress(input, '1');
       expect(inputNode.value).to.equal('+7 (1__) ___ __ __');
 
       inputNode.blur();
-      TestUtils.Simulate.blur(inputNode);
       expect(inputNode.value).to.equal('+7 (1__) ___ __ __');
     }));
 
   it('should handle escaped characters in mask', createInput(
     <Input mask="+4\9 99 9\99 99" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
-      inputNode.value = '+49 12 3';
+      setNativeInputValue(inputNode, '+49 12 3');
       setInputSelection(inputNode, 8, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('+49 12 39');
     }));
 
@@ -196,11 +212,9 @@ describe('react-input-mask', () => {
       expect(inputNode.value).to.equal('+7 (___) ___ __ __');
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
       expect(inputNode.value).to.equal('+7 (___) ___ __ __');
 
       inputNode.blur();
-      TestUtils.Simulate.blur(inputNode);
       expect(inputNode.value).to.equal('+7 (___) ___ __ __');
 
       setInputProps(input, { alwaysShowMask: false });
@@ -213,26 +227,21 @@ describe('react-input-mask', () => {
   it('should adjust cursor position on focus', createInput(
     <Input mask="+7 (999) 999 99 99" value="+7" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       expect(input.getCursorPosition()).to.equal(4);
 
       inputNode.blur();
-      TestUtils.Simulate.blur(inputNode);
 
       setInputProps(input, { value: '+7 (___) ___ _1 __' });
       setInputSelection(inputNode, 2, 0);
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
       expect(input.getCursorPosition()).to.equal(16);
 
       inputNode.blur();
-      TestUtils.Simulate.blur(inputNode);
 
       setInputProps(input, { value: '+7 (___) ___ _1 _1' });
       setInputSelection(inputNode, 2, 0);
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
       expect(input.getCursorPosition()).to.equal(2);
     }));
 
@@ -241,21 +250,17 @@ describe('react-input-mask', () => {
       expect(input.getCursorPosition()).to.equal(4);
 
       inputNode.blur();
-      TestUtils.Simulate.blur(inputNode);
 
       setInputProps(input, { value: '+7 (___) ___ _1 __' });
       setInputSelection(inputNode, 2, 0);
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
       expect(input.getCursorPosition()).to.equal(16);
 
       inputNode.blur();
-      TestUtils.Simulate.blur(inputNode);
 
       setInputProps(input, { value: '+7 (___) ___ _1 _1' });
       setInputSelection(inputNode, 2, 0);
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
       expect(input.getCursorPosition()).to.equal(2);
     }));
 
@@ -278,44 +283,43 @@ describe('react-input-mask', () => {
   it('should format value in onChange (with maskChar)', createInput(
     <Input mask="**** **** **** ****" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       setInputSelection(inputNode, 0, 0);
-      inputNode.value = 'a' + inputNode.value;
+      setNativeInputValue(inputNode, 'a' + inputNode.value);
       setInputSelection(inputNode, 1, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('a___ ____ ____ ____');
       expect(input.getCursorPosition()).to.equal(1);
 
       setInputSelection(inputNode, 0, 19);
-      inputNode.value = 'a';
+      setNativeInputValue(inputNode, 'a');
       setInputSelection(inputNode, 1, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('a___ ____ ____ ____');
       expect(input.getCursorPosition()).to.equal(1);
 
-      inputNode.value = 'aaaaa___ ____ ____ ____';
+      setNativeInputValue(inputNode, 'aaaaa___ ____ ____ ____');
       setInputSelection(inputNode, 1, 4);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('aaaa a___ ____ ____');
       expect(input.getCursorPosition()).to.equal(6);
 
       input.setCursorPosition(4);
-      inputNode.value = 'aaa a___ ____ ____';
+      setNativeInputValue(inputNode, 'aaa a___ ____ ____');
       setInputSelection(inputNode, 3, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('aaa_ a___ ____ ____');
 
       input.setSelection(3, 6);
-      inputNode.value = 'aaaaaa___ ____ ____';
+      setNativeInputValue(inputNode, 'aaaaaa___ ____ ____');
       setInputSelection(inputNode, 6, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('aaaa aa__ ____ ____');
 
       input.setSelection(3, 6);
-      inputNode.value = 'aaaaxa__ ____ ____';
+      setNativeInputValue(inputNode, 'aaaaxa__ ____ ____');
       setInputSelection(inputNode, 5, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('aaaa xa__ ____ ____');
       expect(input.getCursorPosition()).to.equal(6);
     }));
@@ -323,31 +327,30 @@ describe('react-input-mask', () => {
   it('should format value in onChange (without maskChar)', createInput(
     <Input mask="**** **** **** ****" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
       expect(inputNode.value).to.equal('');
 
       setInputSelection(inputNode, 0, 0);
-      inputNode.value = 'aaa';
+      setNativeInputValue(inputNode, 'aaa');
       setInputSelection(inputNode, 3, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('aaa');
       expect(input.getCursorPosition()).to.equal(3);
 
-      inputNode.value = 'aaaaa';
+      setNativeInputValue(inputNode, 'aaaaa');
       setInputSelection(inputNode, 5, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('aaaa a');
       expect(input.getCursorPosition()).to.equal(6);
 
-      inputNode.value = 'aaaa afgh ijkl mnop';
+      setNativeInputValue(inputNode, 'aaaa afgh ijkl mnop');
       setInputSelection(inputNode, 19, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('aaaa afgh ijkl mnop');
       expect(input.getCursorPosition()).to.equal(19);
 
-      inputNode.value = 'aaaa afgh ijkl mnopq';
+      setNativeInputValue(inputNode, 'aaaa afgh ijkl mnopq');
       setInputSelection(inputNode, 20, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('aaaa afgh ijkl mnop');
       expect(input.getCursorPosition()).to.equal(19);
     }));
@@ -355,7 +358,6 @@ describe('react-input-mask', () => {
   it('should handle entered characters (with maskChar)', createInput(
     <Input mask="+7 (*a9) 999 99 99" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setCursorPosition(0);
       simulateInputKeyPress(input, '+');
@@ -383,7 +385,6 @@ describe('react-input-mask', () => {
   it('should handle entered characters (without maskChar)', createInput(
     <Input mask="+7 (999) 999 99 99" defaultValue="+7 (111) 123 45 6" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       setInputSelection(inputNode, 4, 0);
       simulateInputKeyPress(input, 'E');
@@ -400,9 +401,9 @@ describe('react-input-mask', () => {
       simulateInputKeyPress(input, '4');
       expect(inputNode.value).to.equal('+7 (012) 345 67 89');
 
-      inputNode.value = '+7 (';
+      setNativeInputValue(inputNode, '+7 (');
       setInputSelection(inputNode, 4, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       setInputSelection(inputNode, 0, 0);
       simulateInputKeyPress(input, '+');
       expect(inputNode.value).to.equal('+7 (');
@@ -411,7 +412,6 @@ describe('react-input-mask', () => {
   it('should adjust cursor position on input (with maskChar)', createInput(
     <Input mask="(999)" defaultValue="11" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       setInputSelection(inputNode, 3, 0);
       simulateInputKeyPress(input, 'x');
@@ -430,7 +430,6 @@ describe('react-input-mask', () => {
   it('should handle single character removal with Backspace (with maskChar)', createInput(
     <Input mask="+7 (999) 999 99 99" defaultValue="74953156454" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setCursorPosition(10);
       simulateInputBackspacePress(input);
@@ -443,27 +442,25 @@ describe('react-input-mask', () => {
   it('should handle single character removal with Backspace (without maskChar)', createInput(
     <Input mask="+7 (999) 999 99 99" defaultValue="74953156454" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setCursorPosition(10);
       simulateInputBackspacePress(input);
       expect(inputNode.value).to.equal('+7 (495) 156 45 4');
 
-      inputNode.value = '+7 (';
+      setNativeInputValue(inputNode, '+7 (');
       setInputSelection(inputNode, 4, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('+7 (');
 
-      inputNode.value = '+7 ';
+      setNativeInputValue(inputNode, '+7 ');
       setInputSelection(inputNode, 3, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('+7 (');
     }));
 
   it('should adjust cursor position on single character removal with Backspace (with maskChar)', createInput(
     <Input mask="+7 (999) 999 99 99" defaultValue="74953156454" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setCursorPosition(10);
       simulateInputBackspacePress(input);
@@ -480,7 +477,6 @@ describe('react-input-mask', () => {
   it('should adjust cursor position on single character removal with Backspace (without maskChar)', createInput(
     <Input mask="+7 (999) 999 99 99" defaultValue="749531564" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setCursorPosition(16);
       simulateInputBackspacePress(input);
@@ -490,7 +486,6 @@ describe('react-input-mask', () => {
   it('should handle multiple characters removal with Backspace (with maskChar)', createInput(
     <Input mask="+7 (999) 999 99 99" defaultValue="74953156454" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setSelection(1, 10);
       simulateInputBackspacePress(input);
@@ -500,7 +495,6 @@ describe('react-input-mask', () => {
   it('should handle multiple characters removal with Backspace (without maskChar)', createInput(
     <Input mask="+7 (999) 999 99 99" defaultValue="74953156454" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setSelection(1, 10);
       simulateInputBackspacePress(input);
@@ -510,7 +504,6 @@ describe('react-input-mask', () => {
   it('should adjust cursor position on multiple characters removal with Backspace (with maskChar)', createInput(
     <Input mask="+7 (999) 999 99 99" defaultValue="74953156454" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setSelection(1, 10);
       simulateInputBackspacePress(input);
@@ -520,7 +513,6 @@ describe('react-input-mask', () => {
   it('should handle single character removal with Backspace on mask with escaped characters (without maskChar)', createInput(
     <Input mask="+4\9 99 9\99 99" defaultValue="+49 12 394" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setCursorPosition(10);
       simulateInputBackspacePress(input);
@@ -531,9 +523,8 @@ describe('react-input-mask', () => {
       expect(inputNode.value).to.equal('+49 12 ');
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
-      inputNode.value = '+49 12 39';
-      TestUtils.Simulate.change(inputNode);
+      setNativeInputValue(inputNode, '+49 12 39');
+      fireInputEvent(inputNode);
       input.setCursorPosition(6);
       simulateInputBackspacePress(input);
       expect(inputNode.value).to.equal('+49 13 ');
@@ -542,7 +533,6 @@ describe('react-input-mask', () => {
   it('should adjust cursor position on single character removal with Backspace on mask with escaped characters (without maskChar)', createInput(
     <Input mask="+4\9 99 9\99 99" defaultValue="+49 12 394" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setCursorPosition(10);
       simulateInputBackspacePress(input);
@@ -553,9 +543,8 @@ describe('react-input-mask', () => {
       expect(input.getCursorPosition()).to.equal(7);
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
-      inputNode.value = '+49 12 39';
-      TestUtils.Simulate.change(inputNode);
+      setNativeInputValue(inputNode, '+49 12 39');
+      fireInputEvent(inputNode);
       input.setCursorPosition(6);
       simulateInputBackspacePress(input);
       expect(input.getCursorPosition()).to.equal(5);
@@ -564,14 +553,13 @@ describe('react-input-mask', () => {
   it('should handle multiple characters removal with Backspace on mask with escaped characters (without maskChar)', createInput(
     <Input mask="+4\9 99 9\99 99" defaultValue="+49 12 394" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setSelection(4, 6);
       simulateInputBackspacePress(input);
       expect(inputNode.value).to.equal('+49 34 ');
 
-      inputNode.value = '+49 12 394 5';
-      TestUtils.Simulate.change(inputNode);
+      setNativeInputValue(inputNode, '+49 12 394 5');
+      fireInputEvent(inputNode);
       input.setSelection(4, 6);
       simulateInputBackspacePress(input);
       expect(inputNode.value).to.equal('+49 34 59');
@@ -580,14 +568,13 @@ describe('react-input-mask', () => {
   it('should adjust cursor position on multiple characters removal with Backspace on mask with escaped characters (without maskChar)', createInput(
     <Input mask="+4\9 99 9\99 99" defaultValue="+49 12 394" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setSelection(4, 6);
       simulateInputBackspacePress(input);
       expect(input.getCursorPosition()).to.equal(4);
 
-      inputNode.value = '+49 12 394 5';
-      TestUtils.Simulate.change(inputNode);
+      setNativeInputValue(inputNode, '+49 12 394 5');
+      fireInputEvent(inputNode);
       input.setSelection(4, 6);
       simulateInputBackspacePress(input);
       expect(input.getCursorPosition()).to.equal(4);
@@ -596,7 +583,6 @@ describe('react-input-mask', () => {
   it('should handle single character removal with Delete (with maskChar)', createInput(
     <Input mask="+7 (999) 999 99 99" defaultValue="74953156454" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setCursorPosition(0);
       simulateInputDeletePress(input);
@@ -614,7 +600,6 @@ describe('react-input-mask', () => {
   it('should adjust cursor position on single character removal with Delete (with maskChar)', createInput(
     <Input mask="+7 (999) 999 99 99" defaultValue="74953156454" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setCursorPosition(0);
       simulateInputDeletePress(input);
@@ -632,7 +617,6 @@ describe('react-input-mask', () => {
   it('should handle multiple characters removal with Delete (with maskChar)', createInput(
     <Input mask="+7 (999) 999 99 99" defaultValue="74953156454" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setSelection(1, 10);
       simulateInputDeletePress(input);
@@ -642,7 +626,6 @@ describe('react-input-mask', () => {
   it('should handle single character removal with Delete on mask with escaped characters (without maskChar)', createInput(
     <Input mask="+4\9 99 9\99 99" defaultValue="+49 12 394" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setCursorPosition(9);
       simulateInputDeletePress(input);
@@ -653,9 +636,8 @@ describe('react-input-mask', () => {
       expect(inputNode.value).to.equal('+49 12 ');
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
-      inputNode.value = '+49 12 39';
-      TestUtils.Simulate.change(inputNode);
+      setNativeInputValue(inputNode, '+49 12 39');
+      fireInputEvent(inputNode);
       input.setCursorPosition(5);
       simulateInputDeletePress(input);
       expect(inputNode.value).to.equal('+49 13 ');
@@ -664,7 +646,6 @@ describe('react-input-mask', () => {
   it('should adjust cursor position on single character removal with Delete on mask with escaped characters (without maskChar)', createInput(
     <Input mask="+4\9 99 9\99 99" defaultValue="+49 12 394" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setCursorPosition(9);
       simulateInputDeletePress(input);
@@ -675,9 +656,8 @@ describe('react-input-mask', () => {
       expect(input.getCursorPosition()).to.equal(7);
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
-      inputNode.value = '+49 12 39';
-      TestUtils.Simulate.change(inputNode);
+      setNativeInputValue(inputNode, '+49 12 39');
+      fireInputEvent(inputNode);
       input.setCursorPosition(5);
       simulateInputDeletePress(input);
       expect(input.getCursorPosition()).to.equal(5);
@@ -686,14 +666,13 @@ describe('react-input-mask', () => {
   it('should handle multiple characters removal with Delete on mask with escaped characters (without maskChar)', createInput(
     <Input mask="+4\9 99 9\99 99" defaultValue="+49 12 394" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setSelection(4, 6);
       simulateInputDeletePress(input);
       expect(inputNode.value).to.equal('+49 34 ');
 
-      inputNode.value = '+49 12 394 5';
-      TestUtils.Simulate.change(inputNode);
+      setNativeInputValue(inputNode, '+49 12 394 5');
+      fireInputEvent(inputNode);
       input.setSelection(4, 6);
       simulateInputDeletePress(input);
       expect(inputNode.value).to.equal('+49 34 59');
@@ -702,14 +681,13 @@ describe('react-input-mask', () => {
   it('should adjust cursor position on multiple characters removal with Delete on mask with escaped characters (without maskChar)', createInput(
     <Input mask="+4\9 99 9\99 99" defaultValue="+49 12 394" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setSelection(4, 6);
       simulateInputDeletePress(input);
       expect(input.getCursorPosition()).to.equal(4);
 
-      inputNode.value = '+49 12 394 5';
-      TestUtils.Simulate.change(inputNode);
+      setNativeInputValue(inputNode, '+49 12 394 5');
+      fireInputEvent(inputNode);
       input.setSelection(4, 6);
       simulateInputDeletePress(input);
       expect(input.getCursorPosition()).to.equal(4);
@@ -726,7 +704,7 @@ describe('react-input-mask', () => {
       setInputProps(input, { mask: null });
       expect(inputNode.value).to.equal('3-4-7-8');
 
-      inputNode.value = '0-1-2-3';
+      setNativeInputValue(inputNode, '0-1-2-3');
 
       setInputProps(input, { mask: '9999' });
       expect(inputNode.value).to.equal('0123');
@@ -744,13 +722,12 @@ describe('react-input-mask', () => {
       });
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       expect(inputNode.value).to.equal('3878-1226-917_-____');
 
       setInputSelection(inputNode, 1, 0);
       simulateInputKeyPress(input, '4');
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
 
       expect(inputNode.value).to.equal('3478-122691-7____');
     }));
@@ -758,7 +735,6 @@ describe('react-input-mask', () => {
   it('should handle string paste (with maskChar)', createInput(
     <Input mask="9999-9999-9999-9999" defaultValue="____-____-____-6543" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       setInputSelection(inputNode, 3, 15);
       simulateInputPaste(input, '34781226917');
@@ -776,7 +752,6 @@ describe('react-input-mask', () => {
   it('should adjust cursor position on string paste (with maskChar)', createInput(
     <Input mask="9999-9999-9999-9999" defaultValue="____-____-____-6543" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       setInputSelection(inputNode, 3, 15);
       simulateInputPaste(input, '478122691');
@@ -790,7 +765,6 @@ describe('react-input-mask', () => {
   it('should handle string paste (without maskChar)', createInput(
     <Input mask="9999-9999-9999-9999" defaultValue="9999-9999-9999-9999" maskChar={null} />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       setInputSelection(inputNode, 0, 19);
       simulateInputPaste(input, '34781226917');
@@ -820,7 +794,6 @@ describe('react-input-mask', () => {
   it('should handle string paste at position of permanent character (with maskChar)', createInput(
     <Input mask="9999-9999-9999" maskChar=" " />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       simulateInputPaste(input, '1111 1111 1111');
       expect(inputNode.value).to.equal('1111-1111-1111');
@@ -917,7 +890,6 @@ describe('react-input-mask', () => {
         });
 
         inputNode.focus();
-        TestUtils.Simulate.focus(inputNode);
 
         setInputProps(input, { value: '12345' });
         expect(inputNode.value).to.equal('12345');
@@ -932,7 +904,6 @@ describe('react-input-mask', () => {
   it('shouldn\'t modify value on entering non-allowed character', createInput(
     <Input mask="9999" defaultValue="1234" />, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       input.setCursorPosition(0);
       simulateInputKeyPress(input, 'a');
@@ -956,11 +927,10 @@ describe('react-input-mask', () => {
       input.isInputAutofilled = () => true;
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
-      inputNode.value = '12345678';
+      setNativeInputValue(inputNode, '12345678');
       setInputSelection(inputNode, 8, 0);
-      TestUtils.Simulate.change(inputNode);
+      fireInputEvent(inputNode);
 
       expect(inputNode.value).to.equal('1234-5678');
     }));
@@ -978,7 +948,6 @@ describe('react-input-mask', () => {
       });
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       expect(input.getCursorPosition()).to.equal(0);
 
@@ -988,12 +957,10 @@ describe('react-input-mask', () => {
 
       simulateInputBackspacePress(input);
       inputNode.blur();
-      TestUtils.Simulate.blur(inputNode);
 
       expect(inputNode.value).to.equal('');
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       expect(input.getCursorPosition()).to.equal(0);
 
@@ -1005,7 +972,6 @@ describe('react-input-mask', () => {
   it('should handle regular component as children', createInput(
     <Input mask="+7 (999) 999 99 99">{(props) => <TestInputComponent {...props} />}</Input>, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       expect(input.getCursorPosition()).to.equal(4);
 
@@ -1017,7 +983,6 @@ describe('react-input-mask', () => {
   it('should handle functional component as children', createInput(
     <Input mask="+7 (999) 999 99 99">{(props) => <TestFunctionalInputComponent {...props} />}</Input>, (input, inputNode) => {
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       expect(input.getCursorPosition()).to.equal(4);
 
@@ -1041,7 +1006,6 @@ describe('react-input-mask', () => {
       inputNode = getInputDOMNode(input);
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       expect(input.getCursorPosition()).to.equal(4);
 
@@ -1068,8 +1032,8 @@ describe('react-input-mask', () => {
 
   it('should handle change event without focus', createInput(
     <Input mask="+7 (999) 999 99 99" maskChar={null} />, (input, inputNode) => {
-      inputNode.value = '+71234567890';
-      TestUtils.Simulate.change(inputNode);
+      setNativeInputValue(inputNode, '+71234567890');
+      fireInputEvent(inputNode);
       expect(inputNode.value).to.equal('+7 (123) 456 78 90');
     }));
 
@@ -1086,7 +1050,6 @@ describe('react-input-mask', () => {
       });
 
       inputNode.focus();
-      TestUtils.Simulate.focus(inputNode);
 
       expect(input.getCursorPosition()).to.equal(5);
 
