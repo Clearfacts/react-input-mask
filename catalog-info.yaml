@@ -1,0 +1,27 @@
+---
+# Wolters Kluwer Backstage compliant catalog info
+# See https://backstage.io/docs/features/software-catalog/descriptor-format
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: react-input-mask
+  description: "Input masking component for React. Made with attention to UX."
+  annotations:
+    wolterskluwer.io/bit-id: '041800002496'
+spec:
+  type: library
+  lifecycle: production
+  owner: Glenn.Van-Den-Broeck@wolterskluwer.com
+links:
+  - url: "https://sonarqube.cloud-dev.wolterskluwer.eu/dashboard?id=clearfacts%\
+    3Areact-input-mask"
+    type: SAST
+    title: SonarQube
+  - url: "https://wolterskluwer.app.blackduck.com/api/projects/e959ceac-5fef-46\
+    43-a599-c100ec01b462"
+    type: SCA
+    title: Black Duck
+  - url: "https://test4tools.cchaxcess.com/CxWebClient/ProjectStateSummary.aspx\
+    ?projectid=17864"
+    type: SAST
+    title: Checkmarx
