@@ -82,5 +82,11 @@
   "dependencies": {
     "invariant": "^2.2.4",
     "warning": "^4.0.2"
+  },
+  "resolutions": {
+    "cipher-base": "1.0.5",
+    "pbkdf2": "3.1.5",
+    "webpack/yargs/yargs-parser": "13.1.2",
+    "webpack-dev-server/yargs/yargs-parser": "5.0.1"
   }
 }
