@@ -13,15 +13,12 @@ spec:
   lifecycle: production
   owner: Glenn.Van-Den-Broeck@wolterskluwer.com
 links:
-  - url: "https://sonarqube.cloud-dev.wolterskluwer.eu/dashboard?id=clearfacts%\
-    3Areact-input-mask"
+  - url: "https://sonarqube.cloud-dev.wolterskluwer.eu/dashboard?id=clearfacts%3Areact-input-mask"
     type: SAST
     title: SonarQube
-  - url: "https://wolterskluwer.app.blackduck.com/api/projects/e959ceac-5fef-46\
-    43-a599-c100ec01b462"
+  - url: "https://wolterskluwer.app.blackduck.com/api/projects/e959ceac-5fef-4643-a599-c100ec01b462"
     type: SCA
     title: Black Duck
-  - url: "https://test4tools.cchaxcess.com/CxWebClient/ProjectStateSummary.aspx\
-    ?projectid=17864"
+  - url: "https://test4tools.cchaxcess.com/CxWebClient/ProjectStateSummary.aspx?projectid=17864"
     type: SAST
     title: Checkmarx
