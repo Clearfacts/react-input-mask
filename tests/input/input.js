@@ -936,7 +936,7 @@ describe('react-input-mask', () => {
     }));
 
   it('should handle transition between masked and non-masked state', createInput(
-    <Input />, (input, inputNode) => {
+    <Input value="" />, (input, inputNode) => {
       setInputProps(input, {
         value: '',
         onChange: (event) => {

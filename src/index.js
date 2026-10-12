@@ -174,8 +174,7 @@ class InputElement extends React.Component {
     }
 
     if (isSelectionChanged || isValueChanged) {
-      // disable the re-selection in componentDidUpdate to prevent a clash with react-datepicker selection
-      // this.setSelection(newSelection.start, newSelection.end);
+      this.setSelection(newSelection.start, newSelection.end);
     }
   }
 
