@@ -98,6 +98,7 @@
     "ajv": "^6.15.0",
     "async": "^2.6.4",
     "browserslist": "^4.29.3",
-    "elliptic": "^6.6.1"
+    "elliptic": "^6.6.1",
+    "express": "^4.22.3"
   }
 }
