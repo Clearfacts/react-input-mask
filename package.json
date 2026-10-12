@@ -100,6 +100,7 @@
     "browserslist": "^4.29.3",
     "elliptic": "^6.6.1",
     "express": "^4.22.3",
-    "extract-zip": "^1.7.0"
+    "extract-zip": "^1.7.0",
+    "follow-redirects": "^1.16.1"
   }
 }
