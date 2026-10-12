@@ -90,6 +90,7 @@
     "webpack-dev-server/yargs/yargs-parser": "5.0.1"
   },
   "overrides": {
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "pbkdf2": "^3.1.7"
   }
 }
