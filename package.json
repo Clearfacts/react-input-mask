@@ -97,6 +97,7 @@
     "@babel/traverse": "^7.29.10",
     "ajv": "^6.15.0",
     "async": "^2.6.4",
-    "browserslist": "^4.29.3"
+    "browserslist": "^4.29.3",
+    "elliptic": "^6.6.1"
   }
 }
