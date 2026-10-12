@@ -99,6 +99,7 @@
     "async": "^2.6.4",
     "browserslist": "^4.29.3",
     "elliptic": "^6.6.1",
-    "express": "^4.22.3"
+    "express": "^4.22.3",
+    "extract-zip": "^1.7.0"
   }
 }
