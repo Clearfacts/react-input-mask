@@ -102,6 +102,7 @@
     "express": "^4.22.3",
     "extract-zip": "^1.7.0",
     "follow-redirects": "^1.16.1",
-    "fsevents": "^1.2.13"
+    "fsevents": "^1.2.13",
+    "https-proxy-agent": "^9.1.0"
   }
 }
