@@ -1,10 +1,9 @@
-import babel from 'rollup-plugin-babel';
-import { uglify } from 'rollup-plugin-uglify';
-import resolve from 'rollup-plugin-node-resolve';
-import commonjs from 'rollup-plugin-commonjs';
-import replace from 'rollup-plugin-replace';
-import protoToAssign from './rollup.proto-to-assign.plugin';
-import { sizeSnapshot } from 'rollup-plugin-size-snapshot';
+import { babel } from '@rollup/plugin-babel';
+import terser from '@rollup/plugin-terser';
+import { nodeResolve } from '@rollup/plugin-node-resolve';
+import commonjs from '@rollup/plugin-commonjs';
+import replace from '@rollup/plugin-replace';
+import protoToAssign from './rollup.proto-to-assign.plugin.mjs';
 
 const input = './src/index.js';
 
@@ -14,9 +13,9 @@ const isExternal = id => !id.startsWith('\0') && !id.startsWith('.') && !id.star
 
 const external = ['react', 'react-dom'];
 const plugins = [
-  babel(),
-  resolve({
-    jsnext: true
+  babel({ babelHelpers: 'bundled' }),
+  nodeResolve({
+    mainFields: ['jsnext:main', 'module', 'main']
   }),
   commonjs(),
   protoToAssign()
@@ -24,15 +23,17 @@ const plugins = [
 const minifiedPlugins = [
   ...plugins,
   replace({
+    preventAssignment: true,
     'process.env.NODE_ENV': '"production"'
   }),
   babel({
     babelrc: false,
+    babelHelpers: 'bundled',
     plugins: [
       'babel-plugin-minify-dead-code-elimination'
     ]
   }),
-  uglify()
+  terser()
 ];
 
 export default [
@@ -48,9 +49,9 @@ export default [
     plugins: [
       ...plugins,
       replace({
+        preventAssignment: true,
         'process.env.NODE_ENV': '"development"'
-      }),
-      sizeSnapshot()
+      })
     ]
   },
 
@@ -68,14 +69,14 @@ export default [
 
   {
     input,
-    output: { file: 'lib/react-input-mask.development.js', format: 'cjs' },
+    output: { file: 'lib/react-input-mask.development.js', format: 'cjs', exports: 'auto' },
     external: isExternal,
-    plugins: [...plugins, sizeSnapshot()]
+    plugins
   },
 
   {
     input,
-    output: { file: 'lib/react-input-mask.production.min.js', format: 'cjs' },
+    output: { file: 'lib/react-input-mask.production.min.js', format: 'cjs', exports: 'auto' },
     external,
     plugins: minifiedPlugins
   }
