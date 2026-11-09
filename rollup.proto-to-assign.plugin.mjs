@@ -2,6 +2,7 @@ import { transform } from '@babel/core'; // eslint-disable-line import/no-extran
 
 export default function protoToAssignTransform(options = {}) {
   return {
+    name: 'proto-to-assign',
     transform(code) {
       const transformed = transform(code, {
         babelrc: false,
